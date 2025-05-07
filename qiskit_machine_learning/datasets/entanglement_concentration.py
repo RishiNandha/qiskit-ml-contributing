@@ -35,7 +35,7 @@ def entanglement_concentration_data(
     mode: str = "easy",
     one_hot: bool = True,
     include_sample_total: bool = False,
-    sampling_method: str = "isotropic",
+    sampling_method: str = "cardinal",
     class_labels: list | None = None,
 ) -> (
     tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]
@@ -138,8 +138,9 @@ def entanglement_concentration_data(
     # Warnings
     if sampling_method == "cardinal" and n_points > 3**n:
         warnings.warn(
-            """Cardinal Sampling for large number of samples is not recommended
-            and can lead to repeating points. Try "isotropic" sampling method""",
+            """Cardinal Sampling for large number of samples is not recommended 
+            and can lead to an arbitrarily large generation time due to 
+            repeating datapoints. Try "isotropic" sampling method""",
             UserWarning,
         )
 
@@ -165,55 +166,75 @@ def entanglement_concentration_data(
     bound_qc_high = _assign_parameters(n, mode, "high", d_high, qc_high)
 
     # Convert them to Unitaries for batch processing
-    U_low = Operator(bound_qc_low)
-    U_high = Operator(bound_qc_high)
+    U_low = Operator(bound_qc_low, input_dims = (2**n, 1), output_dims = (2**n, 1)).data
+    U_high = Operator(bound_qc_high, input_dims = (2**n, 1), output_dims = (2**n, 1)).data
 
     # Sampling Input States
+    if sampling_method=="isotropic":
+        psi_in = _isotropic(n, n_points)
+    else:
+        psi_in = _cardinal(n, n_points)
 
-    print(U_low, U_high)
+    print(psi_in.shape)
 
     return (1,2,3,4)
 
-def _assign_parameters(n_qubits, mode, label, depth, qc):
-    """Loads parameters into the given QuantumCircuit"""
-    file_path = "models/entanglement_"
-    file_path += f"{mode}_" # easy / hard
-    file_path += f"{label}_" # low / high
-    file_path += f"{n_qubits}qubits.npy"
 
-    file_path = _get_path(file_path)
+def _assign_parameters(
+    n_qubits: int,
+    mode: str,
+    label: str,
+    depth: int,
+    qc: QuantumCircuit,
+) -> QuantumCircuit:
+    """Load pre‑trained parameters from ``models/`` and bind them to *qc*."""
 
+    file_path = _get_path(f"models/entanglement_{mode}_{label}_{n_qubits}qubits.npy")
     weights = np.load(file_path).flatten()
 
-    if len(weights) != 3*depth*n_qubits:
-        raise ValueError("""Parameter mismatch: please install the latest 
-            version using 'pip install qiskit-machine-learning'""")
+    expected = 3 * depth * n_qubits
+    if len(weights) != expected:
+        raise ValueError(
+            "Parameter mismatch – please reinstall the latest "
+            "'qiskit-machine-learning' package (or update the model files).",
+        )
 
-    qc = qc.assign_parameters(weights)
+    return qc.assign_parameters(weights, inplace=False)
 
-    return qc
 
-def _hardware_efficient_ansatz(qc, params, n_qubits, depth):
-    """Adds hardware-efficient ansatz to a QuantumCircuit"""
-    param_idx = 0
+def _hardware_efficient_ansatz(
+    qc: QuantumCircuit, 
+    params: ParameterVector, 
+    n_qubits: int, 
+    depth: int
+) -> None:
+    """Append a hardware‑efficient ansatz layer‑by‑layer to the Quantum Circuit."""
+
+    p = iter(params) 
 
     for _ in range(depth):
-        
         for q in range(n_qubits):
-            qc.rx(params[param_idx], q)
-            qc.ry(params[param_idx+1], q)
-            qc.rz(params[param_idx+2], q)
-            param_idx += 3
+            qc.rx(next(p), q)
+            qc.ry(next(p), q)
+            qc.rz(next(p), q)
 
-        # Entangling layer
+        # Linear entangling ring + wrap‑around C‑NOT
         for q in range(n_qubits - 1):
-            qc.cx(q, q+1)
+            qc.cx(q, q + 1)
         if n_qubits > 1:
-            qc.cx(n_qubits-1, 0)
+            qc.cx(n_qubits - 1, 0)
 
-def _get_path(filepath):
-    root = os.path.dirname(__file__)
-    path = root if filepath is None else os.path.join(root, filepath)
-    return os.path.normpath(path)
+
+def _get_path(relative_path: str) -> str:
+    """Return an absolute path inside the current module directory."""
+    return os.path.normpath(os.path.join(os.path.dirname(__file__), relative_path))
+
+
+def _cardinal(n_qubits: int, n_points: int) -> np.ndarray: 
+    """Samples Qubit States in the axes of the Block Sphere"""
+
+
+def _isotropic(n_qubits: int, n_points: int) -> np.ndarray:  
+    """Samples Qubit States uniformly in the Block Sphere"""
 
 entanglement_concentration_data(10,10,4)
