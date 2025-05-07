@@ -179,10 +179,23 @@ def entanglement_concentration_data(
     else:
         psi_in = _cardinal(n, n_points)
 
-    out_low = U_low @ psi_in
-    out_high = U_high @ psi_in
+    a_features = U_low @ psi_in
+    b_features = U_high @ psi_in
 
-    return (1,2,3,4)
+    x_train = np.concatenate((a_features[:training_size], b_features[:training_size]), axis=0)
+    x_test = np.concatenate((a_features[training_size:], b_features[training_size:]), axis=0)
+    if one_hot:
+        y_train = np.array([[1, 0]] * training_size + [[0, 1]] * training_size)
+        y_test = np.array([[1, 0]] * test_size + [[0, 1]] * test_size)
+    else:
+        y_train = np.array([class_labels[0]] * training_size + [class_labels[1]] * training_size)
+        y_test = np.array([class_labels[0]] * test_size + [class_labels[1]] * test_size)
+
+    if include_sample_total:
+        samples = np.array([n_samples * 2])
+        return (x_train, y_train, x_test, y_test, samples)
+
+    return (x_train, y_train, x_test, y_test)
 
 
 def _assign_parameters(
@@ -316,6 +329,7 @@ def _isotropic(n_qubits: int, n_points: int) -> np.ndarray:
 
 import time
 start = time.perf_counter()
-_ = entanglement_concentration_data(10000, 10, 8, sampling_method="isotropic")
+p = entanglement_concentration_data(100000, 10, 8, sampling_method="isotropic")
 elapsed = time.perf_counter() - start
 print(f"{elapsed:.6f} s")
+print(p[0].shape, p[1].shape, p[2], p[3])
