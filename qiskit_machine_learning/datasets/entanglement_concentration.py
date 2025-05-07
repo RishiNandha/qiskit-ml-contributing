@@ -37,9 +37,12 @@ def entanglement_concentration_data(
     include_sample_total: bool = False,
     sampling_method: str = "cardinal",
     class_labels: list | None = None,
+    formatting: str = "ndarray"
 ) -> (
     tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]
     | tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]
+    | tuple[list[Statevector], np.ndarray, list[Statevector], np.ndarray]
+    | tuple[list[Statevector], np.ndarray, list[Statevector], np.ndarray, np.ndarray]
 ):
     r"""
     Generates a dataset that comprises of Quantum States with two different
@@ -104,14 +107,21 @@ def entanglement_concentration_data(
             Default is ``"cardinal"``.
         class_labels : Custom labels for the two classes when one-hot is not enabled.
             If not provided, the labels default to ``0`` and ``+1``
+        formatting: The format in which datapoints are given. 
+            Choices are:
+
+                * ``"ndarray"``: gives a numpy array of shape (n_points, 2**n_qubits, 1)
+                * ``"statevector"``: gives a python list of Statevector objects
+
+            Default is ``"ndarray"``.
 
     Returns:
         Tuple
         containing the following:
 
-        * **training_features** : ``np.ndarray``
+        * **training_features** : ``np.ndarray`` | ``qiskit.quantum_info.Statevector``
         * **training_labels** : ``np.ndarray``
-        * **testing_features** : ``np.ndarray``
+        * **testing_features** : ``np.ndarray`` | ``qiskit.quantum_info.Statevector``
         * **testing_labels** : ``np.ndarray``
 
         If ``include_sample_total=True``, a fifth element (``np.ndarray``) is included
@@ -136,11 +146,14 @@ def entanglement_concentration_data(
         raise ValueError("Invalid sampling method. Must be 'isotropic' or 'cardinal'")
     if sampling_method == "cardinal" and n_points >= (6**n):
         raise ValueError("""Cardinal Sampling cannot generate a large number of unique 
-            datapoints due to the limited number of combinations possible. Try "isotropic" 
-            sampling method""")
+            datapoints due to the limited number of combinations possible. 
+            Try "isotropic" sampling method""")
+    if formatting not in {"statevector", "ndarray"}:
+        raise ValueError("""Formatting must be "statevector" or "ndarray". Please check for 
+            case sensitivity.""")
 
     # Warnings
-    if sampling_method == "cardinal" and n_points > (3**n)/5:
+    if sampling_method == "cardinal" and n_points > (3**n):
         warnings.warn(
             """Cardinal Sampling for large number of samples is not recommended 
             and can lead to an arbitrarily large generation time due to 
@@ -182,8 +195,19 @@ def entanglement_concentration_data(
     a_features = U_low @ psi_in
     b_features = U_high @ psi_in
 
-    x_train = np.concatenate((a_features[:training_size], b_features[:training_size]), axis=0)
-    x_test = np.concatenate((a_features[training_size:], b_features[training_size:]), axis=0)
+    if formatting == "ndarray":
+        x_train = np.concatenate((a_features[:training_size], b_features[:training_size]), axis=0)
+        x_test = np.concatenate((a_features[training_size:], b_features[training_size:]), axis=0)
+    else:
+        x_train = (
+                [Statevector(v) for v in a_features[:training_size, :, 0]] +
+                [Statevector(v) for v in b_features[:training_size, :, 0]]
+            )
+        x_test = (
+                [Statevector(v) for v in a_features[training_size:, :, 0]] +
+                [Statevector(v) for v in b_features[training_size:, :, 0]]
+            )
+
     if one_hot:
         y_train = np.array([[1, 0]] * training_size + [[0, 1]] * training_size)
         y_test = np.array([[1, 0]] * test_size + [[0, 1]] * test_size)
@@ -213,8 +237,8 @@ def _assign_parameters(
     expected = 3 * depth * n_qubits
     if len(weights) != expected:
         raise ValueError(
-            "Parameter mismatch – please reinstall the latest "
-            "'qiskit-machine-learning' package (or update the model files).",
+            """Parameter mismatch – please reinstall the latest 'qiskit-machine-learning' 
+            package (or update the model files).""",
         )
 
     return qc.assign_parameters(weights, inplace=False)
@@ -326,4 +350,3 @@ def _isotropic(n_qubits: int, n_points: int) -> np.ndarray:
     amplitudes = picked.squeeze(-1).prod(axis=2)
 
     return amplitudes[:, :, None]
-
