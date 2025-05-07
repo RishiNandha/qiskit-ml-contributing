@@ -121,6 +121,8 @@ def entanglement_concentration_data(
     if class_labels is None:
         class_labels = [0, 1]
 
+    n_points = training_size + test_size
+
     # Errors
     if training_size < 0:
         raise ValueError("Training size can't be less than 0")
@@ -132,11 +134,13 @@ def entanglement_concentration_data(
         raise ValueError("Invalid mode. Must be 'easy' or 'hard'")
     if sampling_method not in {"isotropic", "cardinal"}:
         raise ValueError("Invalid sampling method. Must be 'isotropic' or 'cardinal'")
-
-    n_points = training_size + test_size
+    if sampling_method == "cardinal" and n_points >= (6**n):
+        raise ValueError("""Cardinal Sampling cannot generate a large number of unique 
+            datapoints due to the limited number of combinations possible. Try "isotropic" 
+            sampling method""")
 
     # Warnings
-    if sampling_method == "cardinal" and n_points > 3**n:
+    if sampling_method == "cardinal" and n_points > (3**n)/5:
         warnings.warn(
             """Cardinal Sampling for large number of samples is not recommended 
             and can lead to an arbitrarily large generation time due to 
@@ -175,7 +179,8 @@ def entanglement_concentration_data(
     else:
         psi_in = _cardinal(n, n_points)
 
-    print(psi_in.shape)
+    out_low = U_low @ psi_in
+    out_high = U_high @ psi_in
 
     return (1,2,3,4)
 
@@ -187,7 +192,7 @@ def _assign_parameters(
     depth: int,
     qc: QuantumCircuit,
 ) -> QuantumCircuit:
-    """Load pre‑trained parameters from ``models/`` and bind them to *qc*."""
+    """Load pre‑trained parameters from ``models/`` and bind them."""
 
     file_path = _get_path(f"models/entanglement_{mode}_{label}_{n_qubits}qubits.npy")
     weights = np.load(file_path).flatten()
@@ -218,7 +223,6 @@ def _hardware_efficient_ansatz(
             qc.ry(next(p), q)
             qc.rz(next(p), q)
 
-        # Linear entangling ring + wrap‑around C‑NOT
         for q in range(n_qubits - 1):
             qc.cx(q, q + 1)
         if n_qubits > 1:
@@ -231,10 +235,87 @@ def _get_path(relative_path: str) -> str:
 
 
 def _cardinal(n_qubits: int, n_points: int) -> np.ndarray: 
-    """Samples Qubit States in the axes of the Block Sphere"""
+    """Samples Qubit States in the axes of the Block Sphere
+    and takes Kronecker product of those to create the input states
 
+    Each product state is built from the six axis states
+        |0>, |1>, |+>, |–>, |i>, |–i>
+    chosen independently and uniformly for every qubit."""
+
+    sqrt2 = np.sqrt(2.0)
+    axis_states = np.array(
+        [
+            [1.0, 0.0],                       # |0>
+            [0.0, 1.0],                       # |1>
+            [1.0, 1.0],                       # |+>
+            [1.0, -1.0],                      # |–>
+            [1.0, 1.0j],                      # |i>
+            [1.0, -1.0j],                     # |–i>
+        ],
+        dtype=np.complex128,
+    ) / sqrt2
+    axis_states[0] *= sqrt2  # undo √2 for |0>
+    axis_states[1] *= sqrt2  # undo √2 for |1>
+
+    rng = algorithm_globals.random
+
+    indices = rng.choice(6**n_qubits, size=n_points, replace=False)
+    choices = np.empty((n_points, n_qubits), dtype=np.int8)
+    for q in range(n_qubits - 1, -1, -1):
+        choices[:, q] = indices % 6
+        indices //= 6
+
+    q_vectors = axis_states[choices]
+
+    # Broadcast‑and‑Product evaluation of Kronecker products
+    ints = np.arange(2**n_qubits, dtype=np.uint16)[:, None]
+    bits = ((ints >> np.arange(n_qubits)) & 1).astype(np.int8)
+    labels = np.flip(bits, axis=1)  
+
+    picked = np.take_along_axis(
+                q_vectors[:, None, :, :],
+                labels[None, :, :, None],
+                axis=3,
+            )
+
+    amplitudes = picked.squeeze(-1).prod(axis=2)
+
+    return amplitudes[:, :, None]
 
 def _isotropic(n_qubits: int, n_points: int) -> np.ndarray:  
     """Samples Qubit States uniformly in the Block Sphere"""
 
-entanglement_concentration_data(10,10,4)
+    rng = algorithm_globals.random
+
+    # Uniform sampling on the sphere
+    z = rng.uniform(-1, 1, size=(n_points, n_qubits))
+    phi = rng.uniform(0, 2 * np.pi, size=(n_points, n_qubits))
+
+    theta = np.arccos(z)
+    cos = np.cos(theta / 2)
+    sin = np.sin(theta / 2)
+
+    q_vectors = np.stack(
+        [cos, sin * np.exp(1j * phi)],
+        axis=-1
+    )
+
+    # Broadcast-and-Product
+    ints   = np.arange(2**n_qubits, dtype=np.uint16)[:, None]
+    bits   = ((ints >> np.arange(n_qubits)) & 1).astype(np.int8)
+    labels = np.flip(bits, axis=1)
+    picked = np.take_along_axis(
+        q_vectors[:, None, :, :],
+        labels[None, :, :, None],  
+        axis=3,
+    )  
+
+    amplitudes = picked.squeeze(-1).prod(axis=2)
+
+    return amplitudes[:, :, None]
+
+import time
+start = time.perf_counter()
+_ = entanglement_concentration_data(10000, 10, 8, sampling_method="isotropic")
+elapsed = time.perf_counter() - start
+print(f"{elapsed:.6f} s")
