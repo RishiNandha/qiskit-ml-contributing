@@ -18,8 +18,11 @@ from __future__ import annotations
 import warnings
 
 import numpy as np
+import os
+
 from qiskit import QuantumCircuit
 from qiskit.quantum_info import Operator, Statevector
+from qiskit.circuit import ParameterVector
 
 from ..utils import algorithm_globals
 
@@ -32,7 +35,7 @@ def entanglement_concentration_data(
     mode: str = "easy",
     one_hot: bool = True,
     include_sample_total: bool = False,
-    sampling_method: str = "grid",
+    sampling_method: str = "isotropic",
     class_labels: list | None = None,
 ) -> (
     tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]
@@ -86,7 +89,7 @@ def entanglement_concentration_data(
             Choices are:
 
                 * ``"easy"``: uses CE values 0.05 and 0.35 for n = [3,4] and 0.10 and 0.45 for n = 8
-                * ``"hard"``: uses CE values 0.15 and 0.25 for n = [3,4] and 0.25 and 0.40 for n = 8
+                * ``"hard"``: uses CE values 0.15 and 0.25 for n = [3,4] and 0.15 and 0.25 for n = 8
 
             Default is ``"easy"``.
         one_hot : If True, returns labels in one-hot format. Default is True.
@@ -126,9 +129,9 @@ def entanglement_concentration_data(
     if n not in [3,4,8]:
         raise ValueError("Currently only 3, 4 and 8 qubits are supported")
     if mode not in {"easy", "hard"}:
-        raise ValueError("Invalid mode. Must be 'easy' or 'hard'.")
+        raise ValueError("Invalid mode. Must be 'easy' or 'hard'")
     if sampling_method not in {"isotropic", "cardinal"}:
-        raise ValueError("Invalid sampling method. Must be 'isotropic' or 'cardinal'.")
+        raise ValueError("Invalid sampling method. Must be 'isotropic' or 'cardinal'")
 
     n_points = training_size + test_size
 
@@ -139,24 +142,78 @@ def entanglement_concentration_data(
             and can lead to repeating points. Try "isotropic" sampling method""",
             UserWarning,
         )
-        plot_data = False
+
+    # Depth Settings
+    depth = {(3, "easy"): (2, 6), (3, "hard"): (3, 5),
+             (4, "easy"): (2, 6), (4, "hard"): (3, 5),
+             (8, "easy"): (6, 5), (8, "hard"): (5, 6)
+            }
 
 
-def _import_parameters()
+    d_low, d_high = depth[(n, mode)]
 
-def _hardware_efficient_ansatz(qc, params, qubits, depth):
+    # Import Models
+    qc_low = QuantumCircuit(n)
+    qc_high = QuantumCircuit(n)
+
+    params_low = ParameterVector('low', d_low * n * 3)
+    _hardware_efficient_ansatz(qc_low, params_low, n, d_low)
+    bound_qc_low = _assign_parameters(n, mode, "low", d_low, qc_low)
+
+    params_high = ParameterVector('high', d_high * n * 3)
+    _hardware_efficient_ansatz(qc_high, params_high, n, d_high)
+    bound_qc_high = _assign_parameters(n, mode, "high", d_high, qc_high)
+
+    # Convert them to Unitaries for batch processing
+    U_low = Operator(bound_qc_low)
+    U_high = Operator(bound_qc_high)
+
+    # Sampling Input States
+
+    print(U_low, U_high)
+
+    return (1,2,3,4)
+
+def _assign_parameters(n_qubits, mode, label, depth, qc):
+    """Loads parameters into the given QuantumCircuit"""
+    file_path = "models/entanglement_"
+    file_path += f"{mode}_" # easy / hard
+    file_path += f"{label}_" # low / high
+    file_path += f"{n_qubits}qubits.npy"
+
+    file_path = _get_path(file_path)
+
+    weights = np.load(file_path).flatten()
+
+    if len(weights) != 3*depth*n_qubits:
+        raise ValueError("""Parameter mismatch: please install the latest 
+            version using 'pip install qiskit-machine-learning'""")
+
+    qc = qc.assign_parameters(weights)
+
+    return qc
+
+def _hardware_efficient_ansatz(qc, params, n_qubits, depth):
     """Adds hardware-efficient ansatz to a QuantumCircuit"""
     param_idx = 0
+
     for _ in range(depth):
-        # Single-qubit rotations
-        for q in range(qubits):
+        
+        for q in range(n_qubits):
             qc.rx(params[param_idx], q)
             qc.ry(params[param_idx+1], q)
             qc.rz(params[param_idx+2], q)
             param_idx += 3
 
         # Entangling layer
-        for q in range(qubits - 1):
+        for q in range(n_qubits - 1):
             qc.cx(q, q+1)
-        if qubits > 1:
-            qc.cx(qubits-1, 0)
+        if n_qubits > 1:
+            qc.cx(n_qubits-1, 0)
+
+def _get_path(filepath):
+    root = os.path.dirname(__file__)
+    path = root if filepath is None else os.path.join(root, filepath)
+    return os.path.normpath(path)
+
+entanglement_concentration_data(10,10,4)
