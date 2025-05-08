@@ -372,7 +372,7 @@ class TestTorchConnector(TestTorch):
                 width = len(range(0, input_tensor.shape[-1] - self.kernel_size + 1, self.stride))
                 output = torch.zeros((input_tensor.shape[0], self.output_channel, height, width))
                 input_tensor = torch.nn.functional.unfold(
-                    input_tensor[...], kernel_size=self.kernel_size, stride=self.stride
+                    input_tensor.clone(), kernel_size=self.kernel_size, stride=self.stride
                 )
                 qnn_output = self.qnn(input_tensor.permute(2, 0, 1)).permute(1, 2, 0)
                 qnn_output = torch.reshape(
