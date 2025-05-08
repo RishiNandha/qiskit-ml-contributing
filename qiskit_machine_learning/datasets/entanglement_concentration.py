@@ -251,19 +251,27 @@ def _hardware_efficient_ansatz(
     depth: int
 ) -> None:
     """Append a hardware‑efficient ansatz layer‑by‑layer to the Quantum Circuit."""
-
-    p = iter(params) 
+    p_idx = 0
 
     for _ in range(depth):
-        for q in range(n_qubits):
-            qc.rx(next(p), q)
-            qc.ry(next(p), q)
-            qc.rz(next(p), q)
+        layer_start = p_idx
 
-        for q in range(n_qubits - 1):
-            qc.cx(q, q + 1)
-        if n_qubits > 1:
-            qc.cx(n_qubits - 1, 0)
+        for i in range(n_qubits):
+            theta, phi, lamb = params[p_idx : p_idx + 3]
+            p_idx += 3
+            qc.u(theta, phi, lamb, i)
+
+        for i in range(n_qubits // 2):
+            qc.cz(2 * i, 2 * i + 1)
+
+        reuse_idx = layer_start
+        for i in range(n_qubits):
+            theta, phi, lamb = params[reuse_idx : reuse_idx + 3]
+            reuse_idx += 3
+            qc.u(theta, phi, lamb, i)
+
+        for i in range((n_qubits - 1) // 2):
+            qc.cz(2 * i + 1, 2 * i + 2)   
 
 
 def _get_path(relative_path: str) -> str:

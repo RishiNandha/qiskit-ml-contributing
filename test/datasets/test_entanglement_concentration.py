@@ -18,25 +18,47 @@ import unittest
 import json
 import numpy as np
 from ddt import ddt, unpack, idata
+import itertools
 
+from qiskit.quantum_info import Statevector, partial_trace
 from qiskit_machine_learning.utils import algorithm_globals
 from qiskit_machine_learning.datasets import entanglement_concentration_data
 
+def _compute_ce(sv):
+    """Computing CE using Mathematical Expression due to Beckey, J. L. et al.
+       (alternatively SWAP test can be used if done in a Quantum Circuit)"""
+    n = sv.num_qubits
+
+    # Convert to density matrix
+    rho = sv.to_operator().data
+    ce_sum = 0.0
+
+    # Generate all non-empty subsets of qubit indices
+    qubit_indices = list(range(n))
+    
+    for r in range(1, n + 1):
+        for subset in itertools.combinations(qubit_indices, r):
+            
+            # Compute the reduced density matrix for the subset
+            traced_out = [i for i in qubit_indices if i not in subset]
+            reduced_rho = partial_trace(rho, traced_out)
+            
+            # Compute the purity of the reduced state
+            purity = np.trace(reduced_rho.data @ reduced_rho.data).real
+            ce_sum += purity
+
+    ce = 1 - (ce_sum / (2 ** n))
+    
+    return ce
 
 @ddt
 class TestEntangledConcentration(QiskitMachineLearningTestCase):
-    """Entanglement Concentration Generator"""
-    @idata([
-        (3, "easy"),
-        (3, "hard"),
-        (4, "easy"),
-        (4, "hard"),
-        (8, "easy"),
-        (8, "hard"),
-    ])
-    @unpack
+    """Test Entanglement Concentration Generator"""
+    
+    @idata([(n, mode) for n in [3, 4, 8] for mode in ["easy", "hard"]])
     @unpack
     def test_default_params(self, n, mode):
+        """Checking for right shapes and labels"""
         x_train, y_train, x_test, y_test = entanglement_concentration_data(
             training_size=4,
             test_size=4,
@@ -59,8 +81,60 @@ class TestEntangledConcentration(QiskitMachineLearningTestCase):
         )
         np.testing.assert_array_equal(y_train_oh, np.array([[1, 0]] * 4 + [[0, 1]] * 4))
         np.testing.assert_array_equal(y_test_oh, np.array([[1, 0]] * 4 + [[0, 1]] * 4))
+    
+    
+    @idata([(n,) for n in [3, 4, 8]])
+    @unpack
+    def test_statevector_format(self,n):
+        """Check if output values are normalized qiskit.circuit_info.Statevector objects"""
+        x_train, _, _, _ = entanglement_concentration_data(
+            training_size=4,
+            test_size=1,
+            n=n,
+            formatting="statevector"
+        )
+        for state in x_train:
+            self.assertIsInstance(state, Statevector)
 
+            norm = np.linalg.norm(state.data)
+            self.assertAlmostEqual(norm, 1.0, places=4)
 
+    
+    @idata([
+        (3, "easy", [0.05, 0.35]),
+        (3, "hard", [0.15, 0.25]),
+        (4, "easy", [0.05, 0.35]),
+        (4, "hard", [0.15, 0.25]),
+        (8, "easy", [0.10, 0.45]),
+        (8, "hard", [0.15, 0.25]),
+    ])
+    @unpack
+    def test_CE_values(self, n, mode, targets):
+        """"easy": uses CE values 0.05 and 0.35 for n = [3,4] and 0.10 and 0.45 for n = 8
+           "hard": uses CE values 0.15 and 0.25 for n = [3,4] and 0.15 and 0.25 for n = 8"""
+        count = 48//n
+
+        x_train, _, _, _ = entanglement_concentration_data(
+            training_size=count,
+            test_size=0,
+            n=n,
+            mode=mode,
+            formatting = "statevector"
+        )
+
+        low_CE = np.mean(np.array([_compute_ce(x_train[i]) for i in range(count)]))
+        high_CE = np.mean(np.array([_compute_ce(x_train[i]) for i in range(count, 2*count)]))
+
+        self.assertAlmostEqual(low_CE, targets[0], places = 1)
+        self.assertAlmostEqual(high_CE, targets[1], places = 1)
+
+    
+    def test_error_raises(self):
+        with self.assertRaises(ValueError):
+            entanglement_concentration_data(training_size=4, test_size=1, n=1)
+
+        with self.assertRaises(ValueError):
+            entanglement_concentration_data(training_size=4, test_size=1, n=6)
 
 
 if __name__ == "__main__":
