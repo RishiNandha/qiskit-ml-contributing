@@ -16,9 +16,9 @@ Entanglement Concentration
 from __future__ import annotations
 
 import warnings
+import os
 
 import numpy as np
-import os
 
 from qiskit import QuantumCircuit
 from qiskit.quantum_info import Operator, Statevector
@@ -37,7 +37,7 @@ def entanglement_concentration_data(
     include_sample_total: bool = False,
     sampling_method: str = "cardinal",
     class_labels: list | None = None,
-    formatting: str = "ndarray"
+    formatting: str = "ndarray",
 ) -> (
     tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]
     | tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]
@@ -55,18 +55,22 @@ def entanglement_concentration_data(
     argument. Next, based on the ``mode`` argument, two pre-trained circuits "A" and "B"
     are used for generating datapoints.
 
+
     CE can be interpreted as a measure of correlation between the different qubits.
     The ``mode`` argument supports two options. ``"easy"`` gives datapoints with high CE
     difference hence being easy to seperate. ``"hard"`` mode gives closer CE values.
     The user's classifiers can be benchmarked against these modes for their ability to
     separate the data into two classes based on CE.
 
+
     Current implementation supports only ``n`` values of 3 and 4.
+
 
     ``sampling_method`` argument supports two options. ``"isotropic"`` and ``"cardinal"``.
     Isotropic generates qubit states that are sampled randomly in the Bloch Sphere and takes the
     tensor product of all the qubits to build the input state. Cardinal generates only states
     that fall on the axes of the Bloch Sphere before taking the tensor product.
+
 
     **References:**
 
@@ -92,8 +96,8 @@ def entanglement_concentration_data(
         mode :
             Choices are:
 
-                * ``"easy"``: uses CE values 0.18 and 0.40 for n = 3 and 0.10 and 0.45 for n = 4
-                * ``"hard"``: uses CE values 0.28 and 0.40 for n = 3 and 0.15 and 0.25 for n = 4
+                * ``"easy"``: uses CE values 0.18 and 0.40 for n = 3 and 0.12 and 0.43 for n = 4
+                * ``"hard"``: uses CE values 0.28 and 0.40 for n = 3 and 0.22 and 0.34 for n = 4
 
             Default is ``"easy"``.
         one_hot : If True, returns labels in one-hot format. Default is True.
@@ -108,7 +112,7 @@ def entanglement_concentration_data(
             Default is ``"cardinal"``.
         class_labels : Custom labels for the two classes when one-hot is not enabled.
             If not provided, the labels default to ``0`` and ``+1``
-        formatting: The format in which datapoints are given. 
+        formatting: The format in which datapoints are given.
             Choices are:
 
                 * ``"ndarray"``: gives a numpy array of shape (n_points, 2**n_qubits, 1)
@@ -139,19 +143,23 @@ def entanglement_concentration_data(
         raise ValueError("Training size can't be less than 0")
     if test_size < 0:
         raise ValueError("Test size can't be less than 0")
-    if n not in [3,4,8]:
+    if n not in [3, 4, 8]:
         raise ValueError("Currently only 3, 4 and 8 qubits are supported")
     if mode not in {"easy", "hard"}:
         raise ValueError("Invalid mode. Must be 'easy' or 'hard'")
     if sampling_method not in {"isotropic", "cardinal"}:
         raise ValueError("Invalid sampling method. Must be 'isotropic' or 'cardinal'")
     if sampling_method == "cardinal" and n_points >= (6**n):
-        raise ValueError("""Cardinal Sampling cannot generate a large number of unique 
+        raise ValueError(
+            """Cardinal Sampling cannot generate a large number of unique 
             datapoints due to the limited number of combinations possible. 
-            Try "isotropic" sampling method""")
+            Try "isotropic" sampling method"""
+        )
     if formatting not in {"statevector", "ndarray"}:
-        raise ValueError("""Formatting must be "statevector" or "ndarray". Please check for 
-            case sensitivity.""")
+        raise ValueError(
+            """Formatting must be "statevector" or "ndarray". Please check for 
+            case sensitivity."""
+        )
 
     # Warnings
     if sampling_method == "cardinal" and n_points > (3**n):
@@ -163,10 +171,7 @@ def entanglement_concentration_data(
         )
 
     # Depth Settings
-    depth = {(3, "easy"): (2, 6), (3, "hard"): (2, 5),
-             (4, "easy"): (2, 6), (4, "hard"): (2, 5)
-            }
-
+    depth = {(3, "easy"): (2, 6), (3, "hard"): (2, 5), (4, "easy"): (2, 6), (4, "hard"): (2, 5)}
 
     d_low, d_high = depth[(n, mode)]
 
@@ -174,39 +179,37 @@ def entanglement_concentration_data(
     qc_low = QuantumCircuit(n)
     qc_high = QuantumCircuit(n)
 
-    params_low = ParameterVector('low', d_low * n * 3)
+    params_low = ParameterVector("low", d_low * n * 3)
     _hardware_efficient_ansatz(qc_low, params_low, n, d_low)
     bound_qc_low = _assign_parameters(n, mode, "low", d_low, qc_low)
 
-    params_high = ParameterVector('high', d_high * n * 3)
+    params_high = ParameterVector("high", d_high * n * 3)
     _hardware_efficient_ansatz(qc_high, params_high, n, d_high)
     bound_qc_high = _assign_parameters(n, mode, "high", d_high, qc_high)
 
     # Convert them to Unitaries for batch processing
-    U_low = Operator(bound_qc_low, input_dims = (2**n, 1), output_dims = (2**n, 1)).data
-    U_high = Operator(bound_qc_high, input_dims = (2**n, 1), output_dims = (2**n, 1)).data
+    u_low = Operator(bound_qc_low, input_dims=(2**n, 1), output_dims=(2**n, 1)).data
+    u_high = Operator(bound_qc_high, input_dims=(2**n, 1), output_dims=(2**n, 1)).data
 
     # Sampling Input States
-    if sampling_method=="isotropic":
+    if sampling_method == "isotropic":
         psi_in = _isotropic(n, n_points)
     else:
         psi_in = _cardinal(n, n_points)
 
-    a_features = U_low @ psi_in
-    b_features = U_high @ psi_in
+    a_features = u_low @ psi_in
+    b_features = u_high @ psi_in
 
     if formatting == "ndarray":
         x_train = np.concatenate((a_features[:training_size], b_features[:training_size]), axis=0)
         x_test = np.concatenate((a_features[training_size:], b_features[training_size:]), axis=0)
     else:
-        x_train = (
-                [Statevector(v) for v in a_features[:training_size, :, 0]] +
-                [Statevector(v) for v in b_features[:training_size, :, 0]]
-            )
-        x_test = (
-                [Statevector(v) for v in a_features[training_size:, :, 0]] +
-                [Statevector(v) for v in b_features[training_size:, :, 0]]
-            )
+        x_train = [Statevector(v) for v in a_features[:training_size, :, 0]] + [
+            Statevector(v) for v in b_features[:training_size, :, 0]
+        ]
+        x_test = [Statevector(v) for v in a_features[training_size:, :, 0]] + [
+            Statevector(v) for v in b_features[training_size:, :, 0]
+        ]
 
     if one_hot:
         y_train = np.array([[1, 0]] * training_size + [[0, 1]] * training_size)
@@ -216,7 +219,7 @@ def entanglement_concentration_data(
         y_test = np.array([class_labels[0]] * test_size + [class_labels[1]] * test_size)
 
     if include_sample_total:
-        samples = np.array([n_samples * 2])
+        samples = np.array([n_points * 2])
         return (x_train, y_train, x_test, y_test, samples)
 
     return (x_train, y_train, x_test, y_test)
@@ -245,10 +248,7 @@ def _assign_parameters(
 
 
 def _hardware_efficient_ansatz(
-    qc: QuantumCircuit, 
-    params: ParameterVector, 
-    n_qubits: int, 
-    depth: int
+    qc: QuantumCircuit, params: ParameterVector, n_qubits: int, depth: int
 ) -> None:
     """Append a hardware‑efficient ansatz layer‑by‑layer to the Quantum Circuit."""
     p_idx = 0
@@ -271,7 +271,7 @@ def _hardware_efficient_ansatz(
             qc.u(theta, phi, lamb, i)
 
         for i in range((n_qubits - 1) // 2):
-            qc.cz(2 * i + 1, 2 * i + 2)   
+            qc.cz(2 * i + 1, 2 * i + 2)
 
 
 def _get_path(relative_path: str) -> str:
@@ -279,7 +279,7 @@ def _get_path(relative_path: str) -> str:
     return os.path.normpath(os.path.join(os.path.dirname(__file__), relative_path))
 
 
-def _cardinal(n_qubits: int, n_points: int) -> np.ndarray: 
+def _cardinal(n_qubits: int, n_points: int) -> np.ndarray:
     """Samples Qubit States in the axes of the Block Sphere
     and takes Kronecker product of those to create the input states
 
@@ -288,17 +288,20 @@ def _cardinal(n_qubits: int, n_points: int) -> np.ndarray:
     chosen independently and uniformly for every qubit."""
 
     sqrt2 = np.sqrt(2.0)
-    axis_states = np.array(
-        [
-            [1.0, 0.0],                       # |0>
-            [0.0, 1.0],                       # |1>
-            [1.0, 1.0],                       # |+>
-            [1.0, -1.0],                      # |–>
-            [1.0, 1.0j],                      # |i>
-            [1.0, -1.0j],                     # |–i>
-        ],
-        dtype=np.complex128,
-    ) / sqrt2
+    axis_states = (
+        np.array(
+            [
+                [1.0, 0.0],  # |0>
+                [0.0, 1.0],  # |1>
+                [1.0, 1.0],  # |+>
+                [1.0, -1.0],  # |–>
+                [1.0, 1.0j],  # |i>
+                [1.0, -1.0j],  # |–i>
+            ],
+            dtype=np.complex128,
+        )
+        / sqrt2
+    )
     axis_states[0] *= sqrt2  # undo √2 for |0>
     axis_states[1] *= sqrt2  # undo √2 for |1>
 
@@ -315,19 +318,20 @@ def _cardinal(n_qubits: int, n_points: int) -> np.ndarray:
     # Broadcast‑and‑Product evaluation of Kronecker products
     ints = np.arange(2**n_qubits, dtype=np.uint16)[:, None]
     bits = ((ints >> np.arange(n_qubits)) & 1).astype(np.int8)
-    labels = np.flip(bits, axis=1)  
+    labels = np.flip(bits, axis=1)
 
     picked = np.take_along_axis(
-                q_vectors[:, None, :, :],
-                labels[None, :, :, None],
-                axis=3,
-            )
+        q_vectors[:, None, :, :],
+        labels[None, :, :, None],
+        axis=3,
+    )
 
     amplitudes = picked.squeeze(-1).prod(axis=2)
 
     return amplitudes[:, :, None]
 
-def _isotropic(n_qubits: int, n_points: int) -> np.ndarray:  
+
+def _isotropic(n_qubits: int, n_points: int) -> np.ndarray:
     """Samples Qubit States uniformly in the Block Sphere"""
 
     rng = algorithm_globals.random
@@ -340,20 +344,17 @@ def _isotropic(n_qubits: int, n_points: int) -> np.ndarray:
     cos = np.cos(theta / 2)
     sin = np.sin(theta / 2)
 
-    q_vectors = np.stack(
-        [cos, sin * np.exp(1j * phi)],
-        axis=-1
-    )
+    q_vectors = np.stack([cos, sin * np.exp(1j * phi)], axis=-1)
 
     # Broadcast-and-Product
-    ints   = np.arange(2**n_qubits, dtype=np.uint16)[:, None]
-    bits   = ((ints >> np.arange(n_qubits)) & 1).astype(np.int8)
+    ints = np.arange(2**n_qubits, dtype=np.uint16)[:, None]
+    bits = ((ints >> np.arange(n_qubits)) & 1).astype(np.int8)
     labels = np.flip(bits, axis=1)
     picked = np.take_along_axis(
         q_vectors[:, None, :, :],
-        labels[None, :, :, None],  
+        labels[None, :, :, None],
         axis=3,
-    )  
+    )
 
     amplitudes = picked.squeeze(-1).prod(axis=2)
 

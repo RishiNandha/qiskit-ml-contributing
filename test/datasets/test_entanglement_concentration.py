@@ -15,18 +15,18 @@
 from test import QiskitMachineLearningTestCase
 
 import unittest
-import json
+import itertools
 import numpy as np
 from ddt import ddt, unpack, idata
-import itertools
+
 
 from qiskit.quantum_info import Statevector, partial_trace
-from qiskit_machine_learning.utils import algorithm_globals
 from qiskit_machine_learning.datasets import entanglement_concentration_data
+
 
 def _compute_ce(sv):
     """Computing CE using Mathematical Expression due to Beckey, J. L. et al.
-       (alternatively SWAP test can be used if done in a Quantum Circuit)"""
+    (alternatively SWAP test can be used if done in a Quantum Circuit)"""
     n = sv.num_qubits
 
     # Convert to density matrix
@@ -35,23 +35,24 @@ def _compute_ce(sv):
 
     # Generate all non-empty subsets of qubit indices
     qubit_indices = list(range(n))
-    
+
     for r in range(1, n + 1):
         for subset in itertools.combinations(qubit_indices, r):
-            
+
             # Compute the reduced density matrix for the subset
             traced_out = [i for i in qubit_indices if i not in subset]
             reduced_rho = partial_trace(rho, traced_out)
             ce_sum += reduced_rho.purity()
 
-    ce = 1 - (ce_sum / (2 ** n))
-    
+    ce = 1 - (ce_sum / (2**n))
+
     return ce
+
 
 @ddt
 class TestEntangledConcentration(QiskitMachineLearningTestCase):
     """Test Entanglement Concentration Generator"""
-    
+
     @idata([(n, mode) for n in [3, 4] for mode in ["easy", "hard"]])
     @unpack
     def test_default_params(self, n, mode):
@@ -78,17 +79,13 @@ class TestEntangledConcentration(QiskitMachineLearningTestCase):
         )
         np.testing.assert_array_equal(y_train_oh, np.array([[1, 0]] * 4 + [[0, 1]] * 4))
         np.testing.assert_array_equal(y_test_oh, np.array([[1, 0]] * 4 + [[0, 1]] * 4))
-    
-    
+
     @idata([(n,) for n in [3, 4]])
     @unpack
-    def test_statevector_format(self,n):
+    def test_statevector_format(self, n):
         """Check if output values are normalized qiskit.circuit_info.Statevector objects"""
         x_train, _, _, _ = entanglement_concentration_data(
-            training_size=4,
-            test_size=1,
-            n=n,
-            formatting="statevector"
+            training_size=4, test_size=1, n=n, formatting="statevector"
         )
         for state in x_train:
             self.assertIsInstance(state, Statevector)
@@ -96,34 +93,32 @@ class TestEntangledConcentration(QiskitMachineLearningTestCase):
             norm = np.linalg.norm(state.data)
             self.assertAlmostEqual(norm, 1.0, places=4)
 
-    
-    @idata([
-        (3, "easy", [0.18, 0.40]),
-        (3, "hard", [0.28, 0.40]),
-        (4, "easy", [0.12, 0.43]),
-        (4, "hard", [0.22, 0.34]),
-    ])
+    @idata(
+        [
+            (3, "easy", [0.18, 0.40]),
+            (3, "hard", [0.28, 0.40]),
+            (4, "easy", [0.12, 0.43]),
+            (4, "hard", [0.22, 0.34]),
+        ]
+    )
     @unpack
     def test_CE_values(self, n, mode, targets):
+        """Check if the right CE values are generated"""
 
-        count = 48//n
+        count = 48 // n
 
         x_train, _, _, _ = entanglement_concentration_data(
-            training_size=count,
-            test_size=0,
-            n=n,
-            mode=mode,
-            formatting = "statevector"
+            training_size=count, test_size=0, n=n, mode=mode, formatting="statevector"
         )
 
-        low_CE = np.mean(np.array([_compute_ce(x_train[i]) for i in range(count)]))
-        high_CE = np.mean(np.array([_compute_ce(x_train[i]) for i in range(count, 2*count)]))
+        low_ce = np.mean(np.array([_compute_ce(x_train[i]) for i in range(count)]))
+        high_ce = np.mean(np.array([_compute_ce(x_train[i]) for i in range(count, 2 * count)]))
 
-        self.assertTrue(abs(low_CE - targets[0]) < 0.02)
-        self.assertTrue(abs(high_CE - targets[1]) < 0.02)
+        self.assertTrue(abs(low_ce - targets[0]) < 0.02)
+        self.assertTrue(abs(high_ce - targets[1]) < 0.02)
 
-    
     def test_error_raises(self):
+        """Check if parameter errors are handled"""
         with self.assertRaises(ValueError):
             entanglement_concentration_data(training_size=4, test_size=1, n=1)
 
