@@ -61,7 +61,7 @@ def entanglement_concentration_data(
     The user's classifiers can be benchmarked against these modes for their ability to
     separate the data into two classes based on CE.
 
-    Current implementation supports only ``n`` values of 3, 4 and 8.
+    Current implementation supports only ``n`` values of 3 and 4.
 
     ``sampling_method`` argument supports two options. ``"isotropic"`` and ``"cardinal"``.
     Isotropic generates qubit states that are sampled randomly in the Bloch Sphere and takes the
@@ -70,18 +70,19 @@ def entanglement_concentration_data(
 
     **References:**
 
-    [1] Schatzki L, Arrasmith A, Coles PJ, Cerezo M. Entangled datasets for quantum machine learning.
-    arXiv preprint. 2021 Sep;2109.03400. arXiv:2109.03400
-    <https://arxiv.org/abs/2109.03400>_
+    [1] Schatzki L, Arrasmith A, Coles PJ, Cerezo M. Entangled datasets for quantum machine learning.
+    arXiv preprint. 2021 Sep; arXiv:2109.03400.
+    https://arxiv.org/abs/2109.03400
 
-    [2] Beckey JL, Gigena N, Coles PJ, Cerezo M. Computable and operationally meaningful multipartite
-    entanglement measures. Physical Review Letters. 2021 Sep 27;127(14):140501.
-    DOI:10.1103/PhysRevLett.127.140501
-    <https://doi.org/10.1103/PhysRevLett.127.140501>_
+    [2] Beckey JL, Gigena N, Coles PJ, Cerezo M. Computable and operationally meaningful multipartite
+    entanglement measures. Physical Review Letters. 2021 Sep 27; 127(14):140501.
+    doi:10.1103/PhysRevLett.127.140501
+    https://doi.org/10.1103/PhysRevLett.127.140501
 
-    [3] Schatzki L. NTangled Datasets – Hardware Efficient [dataset]. GitHub.
-    2022 Mar 2 (commit f3a68ff). GitHub repository
-    <https://github.com/LSchatzki/NTangled_Datasets/tree/main/Hardware_Efficient>_
+    [3] Schatzki L. NTangled Datasets - Hardware Efficient [dataset]. GitHub.
+    2022 Mar 2 (commit f3a68ff).
+    https://github.com/LSchatzki/NTangled_Datasets/tree/main/Hardware_Efficient
+
 
     Parameters:
         training_size : Number of training samples per class.
@@ -91,8 +92,8 @@ def entanglement_concentration_data(
         mode :
             Choices are:
 
-                * ``"easy"``: uses CE values 0.05 and 0.35 for n = [3,4] and 0.10 and 0.45 for n = 8
-                * ``"hard"``: uses CE values 0.15 and 0.25 for n = [3,4] and 0.15 and 0.25 for n = 8
+                * ``"easy"``: uses CE values 0.18 and 0.40 for n = 3 and 0.10 and 0.45 for n = 4
+                * ``"hard"``: uses CE values 0.28 and 0.40 for n = 3 and 0.15 and 0.25 for n = 4
 
             Default is ``"easy"``.
         one_hot : If True, returns labels in one-hot format. Default is True.
@@ -162,9 +163,8 @@ def entanglement_concentration_data(
         )
 
     # Depth Settings
-    depth = {(3, "easy"): (2, 6), (3, "hard"): (3, 5),
-             (4, "easy"): (2, 6), (4, "hard"): (3, 5),
-             (8, "easy"): (6, 5), (8, "hard"): (5, 6)
+    depth = {(3, "easy"): (2, 6), (3, "hard"): (2, 5),
+             (4, "easy"): (2, 6), (4, "hard"): (2, 5)
             }
 
 
