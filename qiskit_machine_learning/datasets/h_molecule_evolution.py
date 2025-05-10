@@ -20,10 +20,13 @@ import warnings
 import os
 
 import numpy as np
+import pickle as pkl
 
 from qiskit import QuantumCircuit
-from qiskit.quantum_info import Operator, Statevector
-from qiskit.circuit import ParameterVector
+from qiskit.circuit import Parameter
+from qiskit.quantum_info import SparsePauliOp, Statevector
+from qiskit.circuit.library import PauliEvolutionGate
+from qiskit.synthesis import SuzukiTrotter
 
 from ..utils import algorithm_globals
 
@@ -45,8 +48,7 @@ def h_molecule_evolution_data(
     | tuple[list[Statevector], np.ndarray, list[Statevector], np.ndarray]
     | tuple[list[Statevector], np.ndarray, list[Statevector], np.ndarray, np.ndarray]
 ):
-    r"""
-    """
+    r""" """
 
     if include_sample_total:
         samples = np.array([n_points * 2])
@@ -54,3 +56,26 @@ def h_molecule_evolution_data(
 
     return (x_train, y_train, x_test, y_test)
 
+
+def _unitary_circuit(molecule):
+
+    spo = 0
+
+    t = Parameter("t")
+    trotterizer = SuzukiTrotter(order=2, reps=1)
+    u_evolution = PauliEvolutionGate(spo, time=t, synthesis=trotterizer)
+
+
+def _hamiltonian_import(molecule):
+    """Import Hamiltonian from Hamiltonians folder"""
+    dir_path = os.path.dirname(__file__)
+    filename = os.path.join(dir_path, f"hamiltonians\\{molecule}.bin")
+
+    with open(filename, "rb") as f:
+        spo = pkl.load(f)
+
+    print(spo)
+
+    return spo
+
+_hamiltonian_import("H2")
