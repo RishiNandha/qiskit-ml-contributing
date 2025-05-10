@@ -82,7 +82,7 @@ def _evolution_circuit(molecule):
         optimization_level=1,
     )
 
-    return qc_resolved
+    return qc_resolved, t, spo
 
 def _hamiltonian_import(molecule):
     """Import Hamiltonian from Hamiltonians folder"""
