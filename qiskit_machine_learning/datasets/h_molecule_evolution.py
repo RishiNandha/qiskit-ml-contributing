@@ -34,6 +34,8 @@ from qiskit_ibm_runtime import QiskitRuntimeService
 from qiskit_aer import AerSimulator
 from qiskit_aer.noise import NoiseModel, depolarizing_error
 
+from scipy.linalg import expm
+
 
 from ..utils import algorithm_globals
 
@@ -45,7 +47,8 @@ def h_molecule_evolution_data(
     test_start: int,
     test_end: int,
     molecule: str = "H2",
-    noise_mode: str = "reduced"
+    noise_mode: str = "ibm_brisbane",
+    formatting: str = "ndarray"
 ) -> (
     tuple[Statevector, np.ndarray, list[Statevector], np.ndarray, list[Statevector]]
 ):
@@ -62,7 +65,7 @@ def h_molecule_evolution_data(
     qc_evo = qc.assign_parameters({t: delta_t})
 
     # Get Hartree Fock State
-    psi_hf = _hartree_fock(hamiltonian, num_occupancy)
+    psi_hf = _initial_state(hamiltonian, num_occupancy)
 
     # Time stamps for Train & Test
     idx_train, idx_test = np.arange(0, train_end + 1), np.arange(test_start, test_end + 1)
@@ -72,8 +75,13 @@ def h_molecule_evolution_data(
     y_train = _simulate_shortterm(psi_hf, qc_evo, simulator, train_end)
 
     # Ideal Longterm Evolutions
+    y_test = _ideal_longterm(psi_hf, hamiltonian, x_test)
 
-    return (psi_hf, x_train, 1, x_test, 1)
+    if formatting == "ndarray":
+        y_train = _to_np(y_train)
+        y_test = _to_np(y_test)
+
+    return (psi_hf, x_train, y_train, x_test, y_test)
 
 
 def _evolution_circuit(molecule):
@@ -110,11 +118,8 @@ def _hamiltonian_import(molecule):
     return spo
 
 
-def _hartree_fock(hamiltonian, num_occupancy):
-    """Finds an approximation of the Ground State for the Hamiltonian
-
-    For Qubits being one-one mapped to Spin Orbitals, HF state is when
-    all the lowest level orbitals are occupied with | 1 > state
+def _initial_state(hamiltonian, num_occupancy):
+    """Sets a realistic initial state
 
     JW map automatically keeps orbitals in ascending order of energy"""
 
@@ -173,6 +178,7 @@ def _simulate_shortterm(psi_hf, qc_evo, simulator, train_end):
         qc.initialize(psi.data, qc.qubits)
         qc.append(qc_evo, qc.qubits)
 
+        qc.save_statevector()
         qc_resolved = transpile(qc, simulator)
         
         # Execute the circuit on the noisy simulator
@@ -185,5 +191,25 @@ def _simulate_shortterm(psi_hf, qc_evo, simulator, train_end):
     
     return y_train
 
+def _ideal_longterm(psi_hf, H, t):
+    """
+    Return the list of statevectors  exp(-i H t_k) @ psi_hf
+    for every t_k in `times`, using an exact matrix exponential.
+    """
+    h_dense = H.to_matrix()
+    y_test = []
 
-print(h_molecule_evolution_data(1.0, 3, 6, 8))
+    for t_k in t:
+        u_t = expm(-1j * h_dense * t_k) 
+        psi_t = Statevector(u_t @ psi_hf.data)
+        y_test.append(psi_t)
+
+    return y_test
+
+def _to_np(states):
+    """Convert list[Statevector] to ndarray"""
+    dim = len(states[0])
+    return np.stack([sv.data for sv in states], axis=0).reshape(len(states), dim, 1)
+
+
+print(h_molecule_evolution_data(0.1, 3, 6, 8))
