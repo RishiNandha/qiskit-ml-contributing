@@ -5,4 +5,4 @@ scikit-learn>=1.2
 setuptools>=40.1
 dill>=0.3.4
 qiskit-aer>=0.16
-qiskit-ibm-runtime>=0.38
+qiskit-ibm-runtime>=0.21

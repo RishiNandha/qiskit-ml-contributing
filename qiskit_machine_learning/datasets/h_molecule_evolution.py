@@ -27,9 +27,9 @@ from qiskit.circuit import Parameter
 from qiskit.quantum_info import SparsePauliOp, Statevector
 from qiskit.circuit.library import PauliEvolutionGate
 from qiskit.synthesis import SuzukiTrotter
+from qiskit.providers import QiskitBackendNotFoundError
 
 from qiskit_ibm_runtime import QiskitRuntimeService
-from qiskit_ibm_runtime.exceptions import QiskitBackendNotFoundError
 
 from qiskit_aer import AerSimulator
 from qiskit_aer.noise import NoiseModel, depolarizing_error
@@ -45,8 +45,8 @@ def h_molecule_evolution_data(
     test_start: int,
     test_end: int,
     molecule: str = "H2",
-    noise_mode: str = "ibm_oslo",
-    formatting: str = "ndarray"
+    noise_mode: str = "ibm_brisbane",
+    formatting: str = "ndarray",
 ) -> (
     tuple[Statevector, np.ndarray, np.ndarray, np.ndarray, np.ndarray]
     | tuple[Statevector, np.ndarray, list[Statevector], np.ndarray, list[Statevector]]
@@ -57,9 +57,9 @@ def h_molecule_evolution_data(
     occupancy = {"H2": 2, "H3": 2, "H6": 6}
     num_occupancy = occupancy[molecule]
 
-    qc, hamiltonian = _evolution_circuit(molecule)
-    qc_evo = qc.bind_parameters({t: delta_t})
-    
+    qc, t, hamiltonian = _evolution_circuit(molecule)
+    qc_evo = qc.assign_parameters({t: delta_t})
+
     # Get Hartree Fock State
     psi_hf = _hartree_fock(hamiltonian, num_occupancy)
 
@@ -67,22 +67,21 @@ def h_molecule_evolution_data(
     simulator = _noise_simulator(noise_mode)
 
     # Time stamps for Train & Test
-    idx_train, idx_test = np.arange(0, train_end+1), np.arange(test_start, test_end+1)
+    idx_train, idx_test = np.arange(0, train_end + 1), np.arange(test_start, test_end + 1)
     x_train, x_test = delta_t * idx_train, delta_t * idx_test
 
-
-    return (psi_hf, x_train, _, x_test, _)
+    return (psi_hf, x_train, 1, x_test, 1)
 
 
 def _evolution_circuit(molecule):
-    """Get the parametrized circuit for evolution after Trotterization. 
+    """Get the parametrized circuit for evolution after Trotterization.
     Returns:
     - QuantumCircuit (for training set)
     - Parameter Object "t" (for training set)
     - Original Hamiltonian (for testing set)"""
 
     spo = _hamiltonian_import(molecule)
-    
+
     t = Parameter("t")
     trotterizer = SuzukiTrotter(order=2, reps=1)
     u_evolution = PauliEvolutionGate(spo, time=t, synthesis=trotterizer)
@@ -92,15 +91,16 @@ def _evolution_circuit(molecule):
     qc.append(u_evolution, range(n_qubits))
 
     qc_flat = qc.decompose()
-    basis = ['rx', 'ry', 'rz', 'cx']
+    basis = ["rx", "ry", "rz", "cx"]
 
     qc_resolved = transpile(
         qc_flat,
         basis_gates=basis,
         optimization_level=3,
     )
-    
-    return qc_resolved, spo
+
+    return qc_resolved, t, spo
+
 
 def _hamiltonian_import(molecule):
     """Import Hamiltonian from Hamiltonians folder"""
@@ -113,6 +113,7 @@ def _hamiltonian_import(molecule):
 
     return spo
 
+
 def _hartree_fock(hamiltonian, num_occupancy):
     """Finds an approximation of the Ground State for the Hamiltonian
 
@@ -120,40 +121,45 @@ def _hartree_fock(hamiltonian, num_occupancy):
     all the lowest level orbitals are occupied with | 1 > state
 
     JW map automatically keeps orbitals in ascending order of energy"""
-    
+
     n_qubits = hamiltonian.num_qubits
 
-    bitstring = ['1']*num_occupancy ['0'] * (n_qubits - num_occupancy)
+    bitstring = ["1"] * num_occupancy + ["0"] * (n_qubits - num_occupancy)
 
-    occupation_label = ''.join(bitstring)
+    occupation_label = "".join(bitstring)
 
     return Statevector.from_label(occupation_label)
+
 
 def _noise_simulator(noise_mode):
     """Returns a Noisy/Noiseless AerSimulator object"""
 
-    if noise_level == "noiseless":
+    if noise_mode == "noiseless":
         noise_model = None
-    
-    elif noise_level == "reduced":
+
+    elif noise_mode == "reduced":
         single_qubit_error = depolarizing_error(0.001, 1)
         two_qubit_error = depolarizing_error(0.01, 2)
         noise_model = NoiseModel()
-        noise_model.add_all_qubit_quantum_error(single_qubit_error, ['u1', 'u2', 'u3'])
-        noise_model.add_all_qubit_quantum_error(two_qubit_error, ['cx'])
-    
+        noise_model.add_all_qubit_quantum_error(single_qubit_error, ["u1", "u2", "u3"])
+        noise_model.add_all_qubit_quantum_error(two_qubit_error, ["cx"])
+
     # If the given Model is an IBM location
-    else:    
+    else:
         service = QiskitRuntimeService()
-        
+
         try:
             backend = service.backend(noise_mode)
         except QiskitBackendNotFoundError:
-            raise QiskitBackendNotFoundError(f"The specified backend '{noise_mode}' was not found.")
-        
+            backends = service.backends(min_num_qubits=4, operational=True, simulator=False)
+            raise QiskitBackendNotFoundError(
+                f"""The specified backend '{noise_mode}' was not found / was busy. Please select one from {backends}"""
+            )
+
         noise_model = NoiseModel.from_backend(backend)
-    
+
     simulator = AerSimulator(noise_model=noise_model)
     return simulator
 
-print(h_molecule_evolution_data(1.0,3,6,8))
+
+print(h_molecule_evolution_data(1.0, 3, 6, 8))
