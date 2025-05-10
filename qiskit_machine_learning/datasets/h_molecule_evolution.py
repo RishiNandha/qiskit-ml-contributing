@@ -45,30 +45,33 @@ def h_molecule_evolution_data(
     test_start: int,
     test_end: int,
     molecule: str = "H2",
-    noise_mode: str = "ibm_brisbane",
-    formatting: str = "ndarray",
+    noise_mode: str = "reduced"
 ) -> (
-    tuple[Statevector, np.ndarray, np.ndarray, np.ndarray, np.ndarray]
-    | tuple[Statevector, np.ndarray, list[Statevector], np.ndarray, list[Statevector]]
+    tuple[Statevector, np.ndarray, list[Statevector], np.ndarray, list[Statevector]]
 ):
     r""" """
 
-    # Import Hamiltonian and Unitary Evolution Circuit
     occupancy = {"H2": 2, "H3": 2, "H6": 6}
     num_occupancy = occupancy[molecule]
 
+    # Noise Models for Training Data
+    simulator = _noise_simulator(noise_mode)
+
+    # Import Hamiltonian and Unitary Evolution Circuit
     qc, t, hamiltonian = _evolution_circuit(molecule)
     qc_evo = qc.assign_parameters({t: delta_t})
 
     # Get Hartree Fock State
     psi_hf = _hartree_fock(hamiltonian, num_occupancy)
 
-    # Noise Models for Training Data
-    simulator = _noise_simulator(noise_mode)
-
     # Time stamps for Train & Test
     idx_train, idx_test = np.arange(0, train_end + 1), np.arange(test_start, test_end + 1)
     x_train, x_test = delta_t * idx_train, delta_t * idx_test
+
+    # Noisy Shortterm Evolutions
+    y_train = _simulate_shortterm(psi_hf, qc_evo, simulator, train_end)
+
+    # Ideal Longterm Evolutions
 
     return (psi_hf, x_train, 1, x_test, 1)
 
@@ -91,15 +94,8 @@ def _evolution_circuit(molecule):
     qc.append(u_evolution, range(n_qubits))
 
     qc_flat = qc.decompose()
-    basis = ["rx", "ry", "rz", "cx"]
 
-    qc_resolved = transpile(
-        qc_flat,
-        basis_gates=basis,
-        optimization_level=3,
-    )
-
-    return qc_resolved, t, spo
+    return qc_flat, t, spo
 
 
 def _hamiltonian_import(molecule):
@@ -146,6 +142,7 @@ def _noise_simulator(noise_mode):
 
     # If the given Model is an IBM location
     else:
+
         service = QiskitRuntimeService()
 
         try:
@@ -160,6 +157,33 @@ def _noise_simulator(noise_mode):
 
     simulator = AerSimulator(noise_model=noise_model)
     return simulator
+
+def _simulate_shortterm(psi_hf, qc_evo, simulator, train_end):
+    """Simulates short-term dynamics using a noisy simulator."""
+    
+    y_train = []
+    psi = psi_hf.copy()
+    
+    for _ in range(train_end):
+        
+        # Create a new quantum circuit for each step
+        qc = QuantumCircuit(psi.num_qubits)
+        
+        # psi persists after each step
+        qc.initialize(psi.data, qc.qubits)
+        qc.append(qc_evo, qc.qubits)
+
+        qc_resolved = transpile(qc, simulator)
+        
+        # Execute the circuit on the noisy simulator
+        job = simulator.run(qc_resolved)
+        result = job.result()
+        
+        # Update the statevector with the result
+        psi = Statevector(result.get_statevector(qc))
+        y_train.append(psi.copy())
+    
+    return y_train
 
 
 print(h_molecule_evolution_data(1.0, 3, 6, 8))
