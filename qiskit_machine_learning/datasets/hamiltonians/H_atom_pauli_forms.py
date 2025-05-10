@@ -19,7 +19,11 @@ import pickle as pkl
 import os
 import itertools
 
-# Molecule definitions
+"""
+- H2: Usually found at a `0.735 Å` equilibrium bond distance
+- H3+: Usually found both in an equilateral triangle configuration with `0.9 Å` between each pair
+- H6: Usually modelled as a linear chain of 6 atoms with bond lengths `1 Å` between each pair
+"""
 _molecules = {
     "H2": {"atom": "H 0 0 0; H 0 0 0.735", "basis": "sto-3g", "charge": 0, "spin": 0},
     "H3": {
@@ -169,13 +173,19 @@ def _save_H_atom_pauli_forms():
     cached in the repository. This has been included in the repository for
     ready availability of the generation process for future developments.
 
-    Working with PySCF on Windows is non-trivial, and hence
+    Running this needs installing PySCF which is not included as a
+    requirement in requirements-dev.txt. If you are using a Windows
+    environment, it is recommended that you proceed with this module
+    on a different operating system and drop-in import the results.
+
+    This saves H Atom Hamiltonians in Pauli form for further usage
+    by other dataset generators
 
     """
     try:
         from pyscf import gto, scf, ao2mo
-    except:
-        raise ValueError(
+    except ModuleNotFoundError:
+        raise ModuleNotFoundError(
             """This Developer-Only Module requires PySCF. Please install it with 
             pip install --prefer-binary pyscf. If you are using a Windows
             environment, it is recommended that you proceed with this module 
@@ -185,16 +195,23 @@ def _save_H_atom_pauli_forms():
     dir_path = os.path.dirname(__file__)
 
     for label, params in _molecules.items():
+
+        # PySCF Simulations
         mol = gto.M(**params)
         mf = scf.RHF(mol).run(conv_tol=1e-12)
+
+        # E_nuc, 1-body and 2-body Integrals
         E_nuc = mol.energy_nuc()
         h_ao = mf.get_hcore()
         g_ao = mol.intor("int2e")
+
+        # Converting to Spatial Orbitals
         C = mf.mo_coeff
         h_mo = C.T @ h_ao @ C
         g_mo8 = ao2mo.kernel(mol, C)
         g_mo = ao2mo.restore(1, g_mo8, C.shape[1])
 
+        # Converting to Spin Orbitals
         eps = 1e-18
         n_mo = h_mo.shape[0]
         n_so = 2 * n_mo
@@ -202,6 +219,7 @@ def _save_H_atom_pauli_forms():
         h_so = np.zeros((n_so, n_so), dtype=complex)
         g_so = np.zeros((n_so, n_so, n_so, n_so), dtype=complex)
 
+        # Single Body Terms
         for p in range(n_mo):
             for q in range(n_mo):
                 val = h_mo[p, q]
@@ -210,6 +228,7 @@ def _save_H_atom_pauli_forms():
                 h_so[2 * p, 2 * q] = val
                 h_so[2 * p + 1, 2 * q + 1] = val
 
+        # Two Body Terms
         for p, q, r, s in itertools.product(range(n_mo), repeat=4):
             val = g_mo[p, q, r, s]
             if abs(val) < eps:
@@ -219,7 +238,9 @@ def _save_H_atom_pauli_forms():
             g_so[2 * p, 2 * q + 1, 2 * r, 2 * s + 1] = val
             g_so[2 * p + 1, 2 * q, 2 * r + 1, 2 * s] = val
 
+        # Jordan Wigner Transform uses O(n) depth.
         JW_H = _JW_map(E_nuc, h_so, g_so)
+        # Alternatively Bravyi-Kaetev Transform can give O(logn)
 
         fname = f"{label}.bin"
         finalpath = os.path.join(dir_path, fname)
