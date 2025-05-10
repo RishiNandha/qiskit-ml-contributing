@@ -245,7 +245,10 @@ def _save_H_atom_pauli_forms():
         # Alternatively Bravyi-Kaetev Transform can give O(logn)
 
         # Convert to SparsePauliOp
-        pauli_list = [("".join(k), v) for k, v in JW_H.items()]
+
+        # We used qubits in (0,1...) indexing in pauli strings while qiskit
+        # uses (...1,0). Hence we reverse here
+        pauli_list = [("".join(reversed(k)), v) for k, v in JW_H.items()]
         spo = SparsePauliOp.from_list(pauli_list)
 
         fname = f"{label}.bin"

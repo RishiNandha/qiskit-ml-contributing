@@ -28,6 +28,13 @@ from qiskit.quantum_info import SparsePauliOp, Statevector
 from qiskit.circuit.library import PauliEvolutionGate
 from qiskit.synthesis import SuzukiTrotter
 
+from qiskit_ibm_runtime import QiskitRuntimeService
+from qiskit_ibm_runtime.exceptions import QiskitBackendNotFoundError
+
+from qiskit_aer import AerSimulator
+from qiskit_aer.noise import NoiseModel, depolarizing_error
+
+
 from ..utils import algorithm_globals
 
 
@@ -38,7 +45,7 @@ def h_molecule_evolution_data(
     test_start: int,
     test_end: int,
     molecule: str = "H2",
-    generate_noise: bool = True,
+    noise_mode: str = "ibm_oslo",
     formatting: str = "ndarray"
 ) -> (
     tuple[Statevector, np.ndarray, np.ndarray, np.ndarray, np.ndarray]
@@ -46,10 +53,25 @@ def h_molecule_evolution_data(
 ):
     r""" """
 
+    # Import Hamiltonian and Unitary Evolution Circuit
     occupancy = {"H2": 2, "H3": 2, "H6": 6}
     num_occupancy = occupancy[molecule]
 
-    return 0 #(x_train, y_train, x_test, y_test)
+    qc, hamiltonian = _evolution_circuit(molecule)
+    qc_evo = qc.bind_parameters({t: delta_t})
+    
+    # Get Hartree Fock State
+    psi_hf = _hartree_fock(hamiltonian, num_occupancy)
+
+    # Noise Models for Training Data
+    simulator = _noise_simulator(noise_mode)
+
+    # Time stamps for Train & Test
+    idx_train, idx_test = np.arange(0, train_end+1), np.arange(test_start, test_end+1)
+    x_train, x_test = delta_t * idx_train, delta_t * idx_test
+
+
+    return (psi_hf, x_train, _, x_test, _)
 
 
 def _evolution_circuit(molecule):
@@ -78,7 +100,7 @@ def _evolution_circuit(molecule):
         optimization_level=3,
     )
     
-    return qc_resolved, t, spo
+    return qc_resolved, spo
 
 def _hamiltonian_import(molecule):
     """Import Hamiltonian from Hamiltonians folder"""
@@ -95,7 +117,43 @@ def _hartree_fock(hamiltonian, num_occupancy):
     """Finds an approximation of the Ground State for the Hamiltonian
 
     For Qubits being one-one mapped to Spin Orbitals, HF state is when
-    all the lowest level orbitals are occupied with | 1 > state"""
-    return
+    all the lowest level orbitals are occupied with | 1 > state
 
-_evolution_circuit("H2")
+    JW map automatically keeps orbitals in ascending order of energy"""
+    
+    n_qubits = hamiltonian.num_qubits
+
+    bitstring = ['1']*num_occupancy ['0'] * (n_qubits - num_occupancy)
+
+    occupation_label = ''.join(bitstring)
+
+    return Statevector.from_label(occupation_label)
+
+def _noise_simulator(noise_mode):
+    """Returns a Noisy/Noiseless AerSimulator object"""
+
+    if noise_level == "noiseless":
+        noise_model = None
+    
+    elif noise_level == "reduced":
+        single_qubit_error = depolarizing_error(0.001, 1)
+        two_qubit_error = depolarizing_error(0.01, 2)
+        noise_model = NoiseModel()
+        noise_model.add_all_qubit_quantum_error(single_qubit_error, ['u1', 'u2', 'u3'])
+        noise_model.add_all_qubit_quantum_error(two_qubit_error, ['cx'])
+    
+    # If the given Model is an IBM location
+    else:    
+        service = QiskitRuntimeService()
+        
+        try:
+            backend = service.backend(noise_mode)
+        except QiskitBackendNotFoundError:
+            raise QiskitBackendNotFoundError(f"The specified backend '{noise_mode}' was not found.")
+        
+        noise_model = NoiseModel.from_backend(backend)
+    
+    simulator = AerSimulator(noise_model=noise_model)
+    return simulator
+
+print(h_molecule_evolution_data(1.0,3,6,8))
