@@ -46,7 +46,8 @@ def h_molecule_evolution_data(
 ):
     r""" """
 
-
+    occupancy = {"H2": 2, "H3": 2, "H6": 6}
+    num_occupancy = occupancy[molecule]
 
     return 0 #(x_train, y_train, x_test, y_test)
 
@@ -74,9 +75,9 @@ def _evolution_circuit(molecule):
     qc_resolved = transpile(
         qc_flat,
         basis_gates=basis,
-        optimization_level=1,
+        optimization_level=3,
     )
-
+    
     return qc_resolved, t, spo
 
 def _hamiltonian_import(molecule):
@@ -90,5 +91,11 @@ def _hamiltonian_import(molecule):
 
     return spo
 
-def _hartree_fock(hamiltonian):
-    """Finds an approximation of the Ground State for the Hamiltonian"""
+def _hartree_fock(hamiltonian, num_occupancy):
+    """Finds an approximation of the Ground State for the Hamiltonian
+
+    For Qubits being one-one mapped to Spin Orbitals, HF state is when
+    all the lowest level orbitals are occupied with | 1 > state"""
+    return
+
+_evolution_circuit("H2")
