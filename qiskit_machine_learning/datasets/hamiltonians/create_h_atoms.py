@@ -19,6 +19,8 @@ import pickle as pkl
 import os
 import itertools
 
+from qiskit.quantum_info import SparsePauliOp
+
 """
 - H2: Usually found at a `0.735 Å` equilibrium bond distance
 - H3+: Usually found both in an equilateral triangle configuration with `0.9 Å` between each pair
@@ -241,6 +243,10 @@ def _save_H_atom_pauli_forms():
         # Jordan Wigner Transform uses O(n) depth.
         JW_H = _JW_map(E_nuc, h_so, g_so)
         # Alternatively Bravyi-Kaetev Transform can give O(logn)
+
+        # Convert to SparsePauliOp
+        pauli_list = [("".join(k), v) for k, v in JW_H.items()]
+        spo = SparsePauliOp.from_list(pauli_list)
 
         fname = f"{label}.bin"
         finalpath = os.path.join(dir_path, fname)
