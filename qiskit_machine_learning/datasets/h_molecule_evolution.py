@@ -33,25 +33,20 @@ from ..utils import algorithm_globals
 
 # pylint: disable=too-many-positional-arguments
 def h_molecule_evolution_data(
+    delta_t: float,
+    train_end: int,
+    test_start: int,
+    test_end: int,
     molecule: str = "H2",
-    test_size: int = 10,
-    mode: str = "easy",
-    one_hot: bool = True,
-    include_sample_total: bool = False,
-    sampling_method: str = "cardinal",
-    class_labels: list | None = None,
-    formatting: str = "ndarray",
+    generate_noise: bool = True,
+    formatting: str = "ndarray"
 ) -> (
-    tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]
-    | tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]
-    | tuple[list[Statevector], np.ndarray, list[Statevector], np.ndarray]
-    | tuple[list[Statevector], np.ndarray, list[Statevector], np.ndarray, np.ndarray]
+    tuple[Statevector, np.ndarray, np.ndarray, np.ndarray, np.ndarray]
+    | tuple[Statevector, np.ndarray, list[Statevector], np.ndarray, list[Statevector]]
 ):
     r""" """
 
-    # if include_sample_total:
-    #     samples = np.array([n_points * 2])
-    #     return (x_train, y_train, x_test, y_test, samples)
+
 
     return 0 #(x_train, y_train, x_test, y_test)
 
@@ -95,4 +90,5 @@ def _hamiltonian_import(molecule):
 
     return spo
 
-_evolution_circuit("H2")
+def _hartree_fock(hamiltonian):
+    """Finds an approximation of the Ground State for the Hamiltonian"""
