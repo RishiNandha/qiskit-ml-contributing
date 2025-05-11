@@ -251,7 +251,7 @@ def _save_H_atom_pauli_forms():
         pauli_list = [("".join(reversed(k)), v) for k, v in JW_H.items()]
         spo = SparsePauliOp.from_list(pauli_list)
 
-        fname = f"{label}.bin"
+        fname = f"h_molecule_hamiltonians/{label}.bin"
         finalpath = os.path.join(dir_path, fname)
 
         with open(finalpath, "wb") as f:
