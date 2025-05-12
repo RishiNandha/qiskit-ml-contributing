@@ -134,7 +134,6 @@ def h_molecule_evolution_data(
 
                 * ``"H2"``: A linear H2 molecule at 0.735 A bond-length
                 * ``"H3"``: H3 molecule at an equilateral triangle of side 0.9 A
-                * ``"H6"``: A linear H6 molecule a 1 A between each adjacent pair
 
             Default is ``"H2"``.
         noise_mode: The noise model used in the simulation of noisy short term evolutions
@@ -166,11 +165,61 @@ def h_molecule_evolution_data(
 
     """
 
+    # Errors and Warnings
+    if delta_t <= 0:
+        raise ValueError("delta_t must be positive (atomic-units of time).")
+
+    if not isinstance(train_end, int) or train_end < 1:
+        raise ValueError("train_end must be a positive integer.")
+
+    if not isinstance(test_start, int) or test_start < 1:
+        raise ValueError("test_start must be a positive integer.")
+
+    if not isinstance(test_end, int) or test_end <= test_start:
+        raise ValueError("test_end must be an integer greater than test_start.")
+
+    if molecule not in {"H2", "H3"}:   # H6 disabled for now
+        raise ValueError("molecule must be 'H2' or 'H3'; 'H6' is temporarily unsupported.")
+
+    if formatting not in {"ndarray", "statevector"}:
+        raise ValueError("formatting must be 'ndarray' or 'statevector'.")
+
+    if test_start <= train_end:
+        warnings.warn(
+            "Training and testing ranges overlap; this can cause data leakage."
+        )
+
+    backend = None
+    if noise_mode not in {"reduced", "noiseless"}:
+        try:
+            service = QiskitRuntimeService()
+            # real, operational, ≥4-qubit devices
+            backends = service.backends(
+                min_num_qubits=4, operational=True, simulator=False
+            )
+            backend_names = [b.name for b in backends]  # list-comprehension
+            allowed_modes = backend_names + ["reduced", "noiseless"]
+
+            if noise_mode not in allowed_modes:
+                raise ValueError(
+                    f"'{noise_mode}' is not available. "
+                    f"Choose from {allowed_modes}"
+                )
+
+            backend = service.backend(noise_mode)
+        except Exception as exc:
+            raise RuntimeError(
+                "Unable to fetch IBM backends; check your internet connection "
+                "and IBM Quantum account configuration."
+            ) from exc
+
+
+    # Electron Occupancy
     occupancy = {"H2": 2, "H3": 2, "H6": 6}
     num_occupancy = occupancy[molecule]
 
     # Noise Models for Training Data
-    simulator = _noise_simulator(noise_mode)
+    simulator = _noise_simulator(noise_mode, backend)
 
     # Import Hamiltonian and Unitary Evolution Circuit
     qc, t, hamiltonian = _evolution_circuit(molecule)
@@ -223,7 +272,7 @@ def _hamiltonian_import(molecule):
     """Import Hamiltonian from Hamiltonians folder"""
 
     dir_path = os.path.dirname(__file__)
-    filename = os.path.join(dir_path, f"hamiltonians\\{molecule}.bin")
+    filename = os.path.join(dir_path, f"hamiltonians\\h_molecule_hamiltonians\\{molecule}.bin")
 
     with open(filename, "rb") as f:
         spo = pkl.load(f)
@@ -245,7 +294,7 @@ def _initial_state(hamiltonian, num_occupancy):
     return Statevector.from_label(occupation_label)
 
 
-def _noise_simulator(noise_mode):
+def _noise_simulator(noise_mode, backend):
     """Returns a Noisy/Noiseless AerSimulator object"""
 
     if noise_mode == "noiseless":
@@ -260,17 +309,6 @@ def _noise_simulator(noise_mode):
 
     # If the given Model is an IBM location
     else:
-
-        service = QiskitRuntimeService()
-
-        try:
-            backend = service.backend(noise_mode)
-        except QiskitBackendNotFoundError:
-            backends = service.backends(min_num_qubits=4, operational=True, simulator=False)
-            raise QiskitBackendNotFoundError(
-                f"""The specified backend '{noise_mode}' was not found / was busy. Please select one from {backends}"""
-            )
-
         noise_model = NoiseModel.from_backend(backend)
 
     simulator = AerSimulator(noise_model=noise_model)
@@ -280,7 +318,7 @@ def _noise_simulator(noise_mode):
 def _simulate_shortterm(psi_hf, qc_evo, simulator, train_end):
     """Simulates short-term dynamics using a noisy simulator."""
 
-    y_train = []
+    y_train = [psi_hf,]
     psi = psi_hf.copy()
 
     for _ in range(train_end):
@@ -326,6 +364,3 @@ def _to_np(states):
     """Convert list[Statevector] to ndarray"""
     dim = len(states[0])
     return np.stack([sv.data for sv in states], axis=0).reshape(len(states), dim, 1)
-
-
-print(h_molecule_evolution_data(0.1, 3, 6, 8))
