@@ -8,6 +8,7 @@ from qiskit.quantum_info import SparsePauliOp
 import numpy as np
 from ..base_hamiltonian import HamiltonianModel
 
+
 class ClusterModel(HamiltonianModel):
     """Cluster Model with Z, XX, and XZX interactions.
 
@@ -42,26 +43,26 @@ class ClusterModel(HamiltonianModel):
 
         # Z terms (on all sites)
         for i in range(self.num_qubits):
-            label = ['I'] * self.num_qubits
-            label[i] = 'Z'
-            pauli_list.append(''.join(label))
+            label = ["I"] * self.num_qubits
+            label[i] = "Z"
+            pauli_list.append("".join(label))
             coeffs.append(1.0)  # Standard coefficient of 1 for Z terms
 
             # XX terms (for adjacent sites)
             if i < self.num_qubits - 1:
-                label = ['I'] * self.num_qubits
-                label[i] = 'X'
-                label[i+1] = 'X'
-                pauli_list.append(''.join(label))
+                label = ["I"] * self.num_qubits
+                label[i] = "X"
+                label[i + 1] = "X"
+                pauli_list.append("".join(label))
                 coeffs.append(-self.J1)
 
             # XZX terms (for triplets of sites)
             if 0 < i < self.num_qubits - 1:
-                label = ['I'] * self.num_qubits
-                label[i-1] = 'X'
-                label[i] = 'Z'
-                label[i+1] = 'X'
-                pauli_list.append(''.join(label))
+                label = ["I"] * self.num_qubits
+                label[i - 1] = "X"
+                label[i] = "Z"
+                label[i + 1] = "X"
+                pauli_list.append("".join(label))
                 coeffs.append(-self.J2)
 
         return SparsePauliOp(pauli_list, coeffs=coeffs)

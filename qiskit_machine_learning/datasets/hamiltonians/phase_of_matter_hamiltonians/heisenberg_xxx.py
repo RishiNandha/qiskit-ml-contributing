@@ -9,6 +9,7 @@ from qiskit.quantum_info import SparsePauliOp
 import numpy as np
 from ..base_hamiltonian import HamiltonianModel
 
+
 class HeisenbergXXX(HamiltonianModel):
     """Heisenberg XXX model with bond-alternating couplings.
 
@@ -44,11 +45,11 @@ class HeisenbergXXX(HamiltonianModel):
 
         for i in range(self.num_qubits - 1):
             # Add XX, YY, ZZ terms for each bond
-            for pauli in ['XX', 'YY', 'ZZ']:
-                label = ['I'] * self.num_qubits
+            for pauli in ["XX", "YY", "ZZ"]:
+                label = ["I"] * self.num_qubits
                 label[i] = pauli[0]
-                label[i+1] = pauli[1]
-                pauli_list.append(''.join(label))
+                label[i + 1] = pauli[1]
+                pauli_list.append("".join(label))
                 coeffs.append(self.J_list[i])
 
         return SparsePauliOp(pauli_list, coeffs=coeffs)
@@ -68,7 +69,7 @@ class HeisenbergXXX(HamiltonianModel):
         samples = []
         for _ in range(num_samples):
             # Generate random coupling constants for each bond
-            J_list = np.random.uniform(J_range[0], J_range[1], num_qubits-1)
+            J_list = np.random.uniform(J_range[0], J_range[1], num_qubits - 1)
             samples.append(cls(num_qubits, J_list))
         return samples
 

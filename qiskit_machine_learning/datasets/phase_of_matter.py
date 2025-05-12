@@ -29,9 +29,7 @@ from ..utils import algorithm_globals
 
 # pylint: disable=too-many-positional-arguments
 def phase_of_matter_data(
-    training_size: int,
-    test_size: int,
-    n: int
+    training_size: int, test_size: int, n: int
 ) -> (
     tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]
     | tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]
@@ -83,4 +81,4 @@ def phase_of_matter_data(
         If ``include_sample_total=True``, a fifth element (``np.ndarray``) is included
         that specifies the total number of accepted samples.
     """
-    return 
+    return

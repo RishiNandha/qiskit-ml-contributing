@@ -9,6 +9,7 @@ from qiskit.quantum_info import SparsePauliOp
 import numpy as np
 from ..base_hamiltonian import HamiltonianModel
 
+
 class ANNNIModel(HamiltonianModel):
     """Axial Next-Nearest-Neighbor Ising (ANNNI) Model.
 
@@ -47,31 +48,33 @@ class ANNNIModel(HamiltonianModel):
 
         # Nearest-neighbor XX interactions
         for i in range(self.num_qubits - 1):
-            label = ['I'] * self.num_qubits
-            label[i] = 'X'
-            label[i+1] = 'X'
-            pauli_list.append(''.join(label))
+            label = ["I"] * self.num_qubits
+            label[i] = "X"
+            label[i + 1] = "X"
+            pauli_list.append("".join(label))
             coeffs.append(-self.J1)
 
         # Next-nearest-neighbor XX interactions
         for i in range(self.num_qubits - 2):
-            label = ['I'] * self.num_qubits
-            label[i] = 'X'
-            label[i+2] = 'X'
-            pauli_list.append(''.join(label))
+            label = ["I"] * self.num_qubits
+            label[i] = "X"
+            label[i + 2] = "X"
+            pauli_list.append("".join(label))
             coeffs.append(-self.J2)
 
         # Transverse field Z terms
         for i in range(self.num_qubits):
-            label = ['I'] * self.num_qubits
-            label[i] = 'Z'
-            pauli_list.append(''.join(label))
+            label = ["I"] * self.num_qubits
+            label[i] = "Z"
+            pauli_list.append("".join(label))
             coeffs.append(-self.B)
 
         return SparsePauliOp(pauli_list, coeffs=coeffs)
 
     @classmethod
-    def sample_parameters(cls, num_qubits, J1_range=(-1, 1), J2_range=(-1, 1), B_range=(-1, 1), num_samples=10):
+    def sample_parameters(
+        cls, num_qubits, J1_range=(-1, 1), J2_range=(-1, 1), B_range=(-1, 1), num_samples=10
+    ):
         """Sample different parameter configurations.
 
         Args:

@@ -8,6 +8,7 @@ with methods for creating and sampling Hamiltonians with different parameters.
 from qiskit.quantum_info import SparsePauliOp
 import numpy as np
 
+
 class HamiltonianModel:
     """Base class for quantum spin chain Hamiltonian models.
 
@@ -41,7 +42,7 @@ class HamiltonianModel:
             list: List of sampled model instances.
         """
         raise NotImplementedError("Subclasses must implement sample_parameters method")
-        
+
     def get_phase(self):
         """Determine the phase of the model based on parameters.
 

@@ -9,6 +9,7 @@ from qiskit.quantum_info import SparsePauliOp
 import numpy as np
 from ..base_hamiltonian import HamiltonianModel
 
+
 class HaldaneChain(HamiltonianModel):
     """Haldane Chain model.
 
@@ -47,32 +48,34 @@ class HaldaneChain(HamiltonianModel):
 
         # Three-site ZXZ interactions
         for i in range(self.num_qubits - 2):
-            label = ['I'] * self.num_qubits
-            label[i] = 'Z'
-            label[i+1] = 'X'
-            label[i+2] = 'Z'
-            pauli_list.append(''.join(label))
+            label = ["I"] * self.num_qubits
+            label[i] = "Z"
+            label[i + 1] = "X"
+            label[i + 2] = "Z"
+            pauli_list.append("".join(label))
             coeffs.append(-self.J)  # Negative sign for antiferromagnetic coupling
 
         # Single-site X field terms
         for i in range(self.num_qubits):
-            label = ['I'] * self.num_qubits
-            label[i] = 'X'
-            pauli_list.append(''.join(label))
+            label = ["I"] * self.num_qubits
+            label[i] = "X"
+            pauli_list.append("".join(label))
             coeffs.append(-self.h1)
 
         # Two-site XX interaction terms
         for i in range(self.num_qubits - 1):
-            label = ['I'] * self.num_qubits
-            label[i] = 'X'
-            label[i+1] = 'X'
-            pauli_list.append(''.join(label))
+            label = ["I"] * self.num_qubits
+            label[i] = "X"
+            label[i + 1] = "X"
+            pauli_list.append("".join(label))
             coeffs.append(-self.h2)
 
         return SparsePauliOp(pauli_list, coeffs=coeffs)
 
     @classmethod
-    def sample_parameters(cls, num_qubits, J_range=(-1, 1), h1_range=(-1, 1), h2_range=(-1, 1), num_samples=10):
+    def sample_parameters(
+        cls, num_qubits, J_range=(-1, 1), h1_range=(-1, 1), h2_range=(-1, 1), num_samples=10
+    ):
         """Sample different parameter configurations.
 
         Args:
