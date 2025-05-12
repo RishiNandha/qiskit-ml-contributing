@@ -47,7 +47,7 @@ def h_molecule_evolution_data(
     test_start: int,
     test_end: int,
     molecule: str = "H2",
-    noise_mode: str = "ibm_brisbane",
+    noise_mode: str = "reduced",
     formatting: str = "ndarray",
 ) -> (
     tuple[Statevector, np.ndarray, list[Statevector], np.ndarray, list[Statevector]]
